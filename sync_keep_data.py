@@ -7,25 +7,26 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 def get_gspread_client():
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    for env_name in ["GOOGLE_CREDENTIALS", "GCP_SA_KEY", "SERVICE_ACCOUNT_JSON", "GOOGLE_APPLICATION_CREDENTIALS"]:
-        val = os.environ.get(env_name)
-        if val and val.strip():
-            val = val.strip()
-            if val.startswith("{"):
-                return gspread.authorize(Credentials.from_service_account_info(json.loads(val), scopes=scopes))
-            elif os.path.exists(val):
-                return gspread.authorize(Credentials.from_service_account_file(val, scopes=scopes))
-    for fn in ["credentials.json", "service_account.json", "gcp_key.json"]:
-        if os.path.exists(fn):
-            return gspread.authorize(Credentials.from_service_account_file(fn, scopes=scopes))
-    raise RuntimeError("未找到 Google 密钥凭证，请检查 GitHub Secrets！")
+    sa_key = os.environ.get("GCP_SA_KEY") or os.environ.get("GOOGLE_CREDENTIALS") or os.environ.get("SERVICE_ACCOUNT_JSON")
+    if not sa_key:
+        raise RuntimeError("未找到 GCP_SA_KEY 或 GOOGLE_CREDENTIALS 密钥，请检查 GitHub Secrets！")
+    
+    if sa_key.strip().startswith("{"):
+        sa = json.loads(sa_key)
+    else:
+        for fn in ["credentials.json", "service_account.json", "gcp_key.json"]:
+            if os.path.exists(fn):
+                with open(fn, "r", encoding="utf-8") as f:
+                    sa = json.load(f)
+                break
+        else:
+            raise RuntimeError("无法解析 Google 服务账号密钥！")
+            
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    return gspread.authorize(Credentials.from_service_account_info(sa, scopes=scopes))
 
 def open_health_sheet(gc):
-    sheet_id = os.environ.get("GOOGLE_SHEET_ID")
+    sheet_id = os.environ.get("SPREADSHEET_ID") or os.environ.get("GOOGLE_SHEET_ID")
     if sheet_id and sheet_id.strip():
         try:
             return gc.open_by_key(sheet_id.strip())
@@ -34,7 +35,7 @@ def open_health_sheet(gc):
     return gc.open("每周健康- 训练与运动数据")
 
 def fetch_keep_records():
-    mobile = os.environ.get("KEEP_MOBILE") or os.environ.get("KEEP_PHONE") or "19933193369"
+    mobile = os.environ.get("KEEP_PHONE") or os.environ.get("KEEP_MOBILE") or "19933193369"
     password = os.environ.get("KEEP_PASSWORD") or "CHeng123"
     headers = {
         "Content-Type": "application/json",
@@ -221,7 +222,6 @@ def main():
 
         dtype = row[12]
 
-        # 全运动负荷统计
         if d60_start <= rd <= ymd:
             load_60d += load_val
         if wk_start <= rd <= ymd and rt == "running":
@@ -269,7 +269,7 @@ def main():
         warns.append("Z2占比偏低(<40%)")
     if s7_cnt < 3:
         warns.append("力量训练不足3次")
-    warn_str = "；".join(warns) if warns else "状态良好"
+    warn_str = "；".join(warns) if warns else "Status OK"
 
     yd_logs = cleaned_by_date.get(ymd, [])
     sync_ts = now_cn.strftime("%Y-%m-%d %H:%M:%S")
