@@ -4,31 +4,68 @@ from datetime import datetime, timezone, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
+def safe_float(val, default=0.0):
+    try:
+        return float(val) if val is not None and str(val).strip() != "" else default
+    except Exception:
+        return default
+
 def main():
     sa_key = os.environ.get("GCP_SA_KEY") or os.environ.get("GOOGLE_CREDENTIALS")
     sheet_id = os.environ.get("SPREADSHEET_ID") or os.environ.get("GOOGLE_SHEET_ID")
     sa = json.loads(sa_key)
     client = gspread.authorize(Credentials.from_service_account_info(sa, scopes=["https://www.googleapis.com/auth/spreadsheets"]))
-    sh = client.open_by_key(sheet_id)
+    sh = client.open_by_key(sheet_id.strip())
+    
     ws_ana = sh.worksheet("每日分析")
     ws_rep = sh.worksheet("每日日报")
+    ws_diet = sh.worksheet("历史饮食记录")
 
     ana_rows = ws_ana.get_all_values()
-    if len(ana_rows) < 2: return
+    if len(ana_rows) < 2:
+        return
 
     latest = ana_rows[-1]
-    ymd, wk_km, r7_cnt, s7_cnt, r7_hr, z2_r, acwr = latest[0], latest[1], latest[2], latest[3], latest[4], latest[5], float(latest[6] or 0)
+    ymd = latest[0]
+    wk_km = latest[1]
+    r7_cnt = latest[2]
+    s7_cnt = latest[3]
+    r7_hr = latest[4]
+    z2_r = latest[5]
+    acwr = safe_float(latest[6])
     yd_logs_str = latest[10] if len(latest) > 10 else "[]"
     wn = latest[13] if len(latest) > 13 else "6"
     target_km = latest[14] if len(latest) > 14 else "18"
     today_plan = latest[15] if len(latest) > 15 else "休息"
 
-    try: yd_logs = json.loads(yd_logs_str)
-    except: yd_logs = []
+    # 读取昨日饮食记录
+    diet_rows = ws_diet.get_all_values()
+    yd_diet = next((dr for dr in diet_rows[1:] if dr and dr[0] == ymd), None)
+
+    diet_summary = ""
+    if yd_diet and len(yd_diet) >= 11:
+        water_val = yd_diet[6]
+        sodium_val = yd_diet[7]
+        potassium_val = yd_diet[8]
+        magnesium_val = yd_diet[9]
+        diet_summary = (
+            f"\n### 4. 昨日营养与电解质摄入核验\n"
+            f"- **水分摄入**：{water_val} ml（基准目标 2000-2500 ml）\n"
+            f"- **电解质表现**：钠 {sodium_val} mg | 钾 {potassium_val} mg | 镁 {magnesium_val} mg\n"
+        )
+
+    try:
+        yd_logs = json.loads(yd_logs_str)
+    except Exception:
+        yd_logs = []
 
     if yd_logs:
-        yd_summary = "；".join([f"{lg.get('name', '训练')} ({lg.get('kmDistance', 0)}km, {round(float(lg.get('duration', 0))/60)}分钟, 均心率:{lg.get('avgHR') or '-'}bpm)" for lg in yd_logs])
-    else: yd_summary = "昨日无运动记录（休息日）"
+        yd_summary = "；".join([
+            f"{lg.get('name', '训练')} ({lg.get('kmDistance', 0)}km, {round(float(lg.get('duration', 0))/60)}分钟, 均心率:{lg.get('avgHR') or '-'}bpm)"
+            for lg in yd_logs
+        ])
+    else:
+        yd_summary = "昨日无运动记录（休息日）"
 
     if "上肢" in today_plan:
         macro, spec = "碳水 4 g/kg | 蛋白质 1.8 g/kg", "训练后补充乳清蛋白/鸡蛋 + 香蕉，促进上肢肌群修复"
@@ -50,11 +87,19 @@ def main():
 
     md = (
         f"# 🏃 训练日报 ({ymd}) | 第 {wn} 周 | 维持体重·保持活力\n"
-        f"### 1. 近 7 天训练概览\n- **跑量**：{wk_km} km | **力量**：{s7_cnt}次 | **均心率**：{r7_hr} bpm | **ACWR**：{acwr}\n"
-        f"### 2. 核心达标监控\n- **本周跑量进度**：{wk_km} / {target_km} km\n- **ACWR 负荷比**：{acwr}（安全区间 0.8-1.3）\n- **Z2 心率占比**：{z2_r}%\n"
-        f"### 3. 昨日训练明细\n- {yd_summary}\n"
-        f"### 4. 今日营养建议（适配：{today_plan}）\n- **宏量目标**：{macro}\n- **专项补给**：{spec}{anti_inf}\n{meals}\n"
-        f"### 5. 今日训练重点\n> **{today_plan}**"
+        f"### 1. 近 7 天训练概览\n"
+        f"- **跑量**：{wk_km} km | **力量**：{s7_cnt}次 | **均心率**：{r7_hr} bpm | **ACWR**：{acwr}\n"
+        f"### 2. 核心达标监控\n"
+        f"- **本周跑量进度**：{wk_km} / {target_km} km\n"
+        f"- **ACWR 负荷比**：{acwr}（安全区间 0.8-1.3）\n"
+        f"- **Z2 心率占比**：{z2_r}%\n"
+        f"### 3. 昨日训练明细\n"
+        f"- {yd_summary}{diet_summary}\n"
+        f"### 5. 今日营养建议（适配：{today_plan}）\n"
+        f"- **宏量目标**：{macro}\n"
+        f"- **专项补给**：{spec}{anti_inf}\n{meals}\n"
+        f"### 6. 今日训练重点\n"
+        f"> **{today_plan}**"
     )
 
     tz_cn = timezone(timedelta(hours=8))
@@ -67,6 +112,7 @@ def main():
         ws_rep.update(range_name=f"A{found_idx}:C{found_idx}", values=[[ymd, md, gen_ts]], value_input_option="USER_ENTERED")
     else:
         ws_rep.append_row([ymd, md, gen_ts], value_input_option="USER_ENTERED")
+    print(f"✅ 《每日日报》生成完毕：{ymd}")
 
 if __name__ == "__main__":
     main()
