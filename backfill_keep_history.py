@@ -61,7 +61,8 @@ def fetch_all_keep_logs(token):
 if __name__ == "__main__":
     print("🚀 启动安全增量历史回溯 (保护现有历史数据，绝不清空)...")
     phone = os.environ.get("KEEP_PHONE") or os.environ.get("KEEP_MOBILE")
-    token = get_keep_token(phone, os.environ["KEEP_PASSWORD"])
+    password = os.environ.get("KEEP_PASSWORD")
+    token = get_keep_token(phone, password)
     keep_rows = fetch_all_keep_logs(token)
     
     sa_key = os.environ.get("GCP_SA_KEY") or os.environ.get("GOOGLE_CREDENTIALS")
