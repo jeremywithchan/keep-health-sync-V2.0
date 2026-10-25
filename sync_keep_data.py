@@ -193,6 +193,7 @@ def main():
 
         dtype = row[12]
 
+        # 统计全部运动情况计算 ACWR
         if d60_start <= rd <= ymd:
             load_60d += load_val
         if wk_start <= rd <= ymd and rt == "running":
