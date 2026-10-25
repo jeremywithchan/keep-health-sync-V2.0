@@ -59,7 +59,6 @@ def fetch_all_keep_logs(token):
     return cleaned_rows
 
 if __name__ == "__main__":
-    print("🚀 启动安全增量历史回溯 (保护现有历史数据，绝不清空)...")
     phone = os.environ.get("KEEP_PHONE") or os.environ.get("KEEP_MOBILE")
     password = os.environ.get("KEEP_PASSWORD")
     token = get_keep_token(phone, password)
@@ -73,11 +72,6 @@ if __name__ == "__main__":
     sheet = client.open_by_key(sheet_id).worksheet("训练记录")
     
     existing_all = sheet.get_all_values()
-    headers = existing_all[0] if existing_all else [
-        "日期", "运动类型", "训练名称", "距离 km", "时长 秒", "消耗 kcal",
-        "均心率 bpm", "最大心率 bpm", "爬升 m", "配速 秒/km", "负荷分", "完成日期", "dataType"
-    ]
-    
     existing_keys = set()
     for r in existing_all[1:]:
         if len(r) > 11 and r[11]:
@@ -95,6 +89,6 @@ if __name__ == "__main__":
     if new_to_insert:
         new_to_insert.sort(key=lambda x: str(x[11]))
         sheet.append_rows(new_to_insert, value_input_option="USER_ENTERED")
-        print(f"🎉 成功补充写入 {len(new_to_insert)} 条新运动记录，现有历史完好无损！")
+        print(f"成功补充写入 {len(new_to_insert)} 条运动记录")
     else:
-        print("✅ 表格已包含 Keep 近期全部运动记录，无需重复追加。")
+        print("表格已包含近期记录，无需重复追加。")
