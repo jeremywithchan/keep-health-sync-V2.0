@@ -11,16 +11,15 @@ from google.oauth2.service_account import Credentials
 def safe_float(val, default=0.0):
     try:
         return float(val) if val is not None and str(val).strip() != "" else default
-    except:
+    except Exception:
         return default
 
 def safe_int(val, default=0):
     try:
         return int(float(val)) if val is not None and str(val).strip() != "" else default
-    except:
+    except Exception:
         return default
 
-# 1. 严格使用与 backfill 跑通版本 100% 一致的 Google 表格认证
 def get_sheets():
     sa_key = (
         os.environ.get("GCP_SA_KEY") 
@@ -28,34 +27,25 @@ def get_sheets():
         or os.environ.get("SERVICE_ACCOUNT_JSON")
     )
     if not sa_key:
-        print("❌ 错误: 未找到 Google 服务账号密钥 (GCP_SA_KEY)，请检查 GitHub Secrets！")
+        print("❌ 错误: 未找到 Google 服务账号密钥 (GCP_SA_KEY)！")
         sys.exit(1)
 
     try:
         sa = json.loads(sa_key)
-        # 只请求表格权限，避免 Drive 权限不足导致 403
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
         client = gspread.authorize(Credentials.from_service_account_info(sa, scopes=scopes))
-        
         sheet_id = (
             os.environ.get("SPREADSHEET_ID") 
             or os.environ.get("GOOGLE_SHEET_ID")
-            or "DtTMPFXAJGhF"
         )
-        sh = client.open_by_key(sheet_id.strip())
-        return sh
+        return client.open_by_key(sheet_id.strip())
     except Exception as e:
         print(f"❌ Google 表格连接失败: {e}")
         traceback.print_exc()
         sys.exit(1)
 
-# 2. 严格使用与 backfill 跑通版本一致的 Keep 登录与抓取
 def fetch_keep_records():
-    phone = (
-        os.environ.get("KEEP_PHONE") 
-        or os.environ.get("KEEP_MOBILE") 
-        or "19933193369"
-    )
+    phone = os.environ.get("KEEP_PHONE") or os.environ.get("KEEP_MOBILE") or "19933193369"
     password = os.environ.get("KEEP_PASSWORD") or "CHeng123"
     
     login_url = "https://api.gotokeep.com/v1.1/users/login"
@@ -79,7 +69,7 @@ def fetch_keep_records():
         print(f"⚠️ Keep API 请求异常: {e}")
         return []
 
-# 3. 铁律规则：越野跑无条件豁免，常规跑剔除散步与热身
+# 核心铁律：越野跑无条件豁免直接计入跑量；常规跑步拦截散步和过慢配速
 def is_pure_running(l):
     km = safe_float(l.get("kmDistance"))
     dur = safe_float(l.get("duration"))
@@ -89,7 +79,6 @@ def is_pure_running(l):
     name = (l.get("name") or "").lower()
     tp = (l.get("type") or "").lower()
 
-    # 铁律：只要有越野跑标识，无条件直接计入跑量，不设距离与时间门槛
     if "trail" in dt or "越野" in name:
         return True
 
@@ -127,8 +116,6 @@ def main():
     ws_ana = sh.worksheet("每日分析")
 
     records = fetch_keep_records()
-    print(f"📦 Keep 抓取到记录批次: {len(records)}")
-    
     cleaned_by_date = {}
     new_rows = []
 
@@ -175,7 +162,7 @@ def main():
                     0, 0, item["loadScore"], done_date, dt
                 ])
 
-    # 4. 安全排重并正序追加至《训练记录》
+    # 安全增量写入，主键去重
     existing_train = ws_train.get_all_values()
     existing_keys = set()
     for r in existing_train[1:]:
@@ -195,10 +182,8 @@ def main():
         to_append.sort(key=lambda x: str(x[11]))
         ws_train.append_rows(to_append, value_input_option="USER_ENTERED")
         print(f"✅ 《训练记录》已追加 {len(to_append)} 条新数据。")
-    else:
-        print("ℹ️ 《训练记录》无新运动数据需追加。")
 
-    # 5. 基于全运动负荷重新计算每日指标
+    # 全运动负荷 ACWR 计算
     all_train = ws_train.get_all_values()[1:]
     tz_cn = timezone(timedelta(hours=8))
     now_cn = datetime.now(tz_cn)
@@ -231,7 +216,6 @@ def main():
         load_val = safe_float(row[10]) if row[10] else (km * 10 if km > 0 else 5.0)
         dtype = row[12]
 
-        # 核心铁律：ACWR 统计全部运动情况
         if d60_start <= rd <= ymd:
             load_60d += load_val
         if wk_start <= rd <= ymd and rt == "running":
@@ -291,18 +275,15 @@ def main():
         s_goal, wn, target_km, t_plan, p_km, p_elev, "自动同步", sync_ts
     ]
 
-    # 更新或追加到《每日分析》
     ana_all = ws_ana.get_all_values()
     found_idx = next((idx for idx, r_val in enumerate(ana_all[1:], start=2) if r_val and r_val[0] == ymd), None)
 
     if found_idx:
         ws_ana.update(range_name=f"A{found_idx}:T{found_idx}", values=[ana_row], value_input_option="USER_ENTERED")
-        print(f"✅ 已更新《每日分析》 {ymd} | 全运动 ACWR={acwr}")
+        print(f"✅ 《每日分析》更新成功: {ymd} | 全运动 ACWR={acwr}")
     else:
         ws_ana.append_row(ana_row, value_input_option="USER_ENTERED")
-        print(f"✅ 已追加《每日分析》 {ymd} | 全运动 ACWR={acwr}")
-
-    print("🎉 Daily Keep Sync V2.0 执行成功！")
+        print(f"✅ 《每日分析》追加成功: {ymd} | 全运动 ACWR={acwr}")
 
 if __name__ == "__main__":
     main()
