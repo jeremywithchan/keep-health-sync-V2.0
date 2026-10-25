@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import time
 from datetime import datetime
@@ -9,13 +10,13 @@ from google.oauth2.service_account import Credentials
 def safe_float(val, default=0.0):
     try:
         return float(val) if val is not None and str(val).strip() != "" else default
-    except:
+    except Exception:
         return default
 
 def safe_int(val, default=0):
     try:
         return int(float(val)) if val is not None and str(val).strip() != "" else default
-    except:
+    except Exception:
         return default
 
 def get_keep_token(phone, password):
@@ -24,7 +25,7 @@ def get_keep_token(phone, password):
     headers = {"Content-Type": "application/json", "User-Agent": "Keep/7.0.0 (iPhone)"}
     res = requests.post(url, json=payload, headers=headers, timeout=15)
     data = res.json()
-    return data["data"].get("token") or data["data"].get("accessToken")
+    return data.get("data", {}).get("token") or data.get("data", {}).get("accessToken")
 
 def fetch_all_keep_logs(token):
     headers = {"Authorization": f"Bearer {token}", "User-Agent": "Keep/7.0.0 (iPhone)"}
@@ -59,17 +60,26 @@ def fetch_all_keep_logs(token):
     return cleaned_rows
 
 if __name__ == "__main__":
-    phone = os.environ.get("KEEP_PHONE") or os.environ.get("KEEP_MOBILE")
-    password = os.environ.get("KEEP_PASSWORD")
+    print("🚀 启动安全增量历史回溯 (保护现有历史数据，绝不清空)...")
+    phone = os.environ.get("KEEP_PHONE") or os.environ.get("KEEP_MOBILE") or "19933193369"
+    password = os.environ.get("KEEP_PASSWORD") or "CHeng123"
     token = get_keep_token(phone, password)
+    if not token:
+        print("❌ Keep 登录失败，请检查账号密码！")
+        sys.exit(1)
+        
     keep_rows = fetch_all_keep_logs(token)
     
     sa_key = os.environ.get("GCP_SA_KEY") or os.environ.get("GOOGLE_CREDENTIALS")
+    if not sa_key:
+        print("❌ 未找到 GCP_SA_KEY，请检查 Secrets！")
+        sys.exit(1)
+        
     sa = json.loads(sa_key)
     client = gspread.authorize(Credentials.from_service_account_info(sa, scopes=["https://www.googleapis.com/auth/spreadsheets"]))
     
     sheet_id = os.environ.get("SPREADSHEET_ID") or os.environ.get("GOOGLE_SHEET_ID")
-    sheet = client.open_by_key(sheet_id).worksheet("训练记录")
+    sheet = client.open_by_key(sheet_id.strip()).worksheet("训练记录")
     
     existing_all = sheet.get_all_values()
     existing_keys = set()
@@ -89,6 +99,6 @@ if __name__ == "__main__":
     if new_to_insert:
         new_to_insert.sort(key=lambda x: str(x[11]))
         sheet.append_rows(new_to_insert, value_input_option="USER_ENTERED")
-        print(f"成功补充写入 {len(new_to_insert)} 条运动记录")
+        print(f"🎉 成功补充写入 {len(new_to_insert)} 条新运动记录，现有历史完好无损！")
     else:
-        print("表格已包含近期记录，无需重复追加。")
+        print("✅ 表格已包含 Keep 近期全部运动记录，无需重复追加。")
