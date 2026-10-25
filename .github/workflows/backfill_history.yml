@@ -18,15 +18,17 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install requests gspread google-auth
+          pip install requests gspread google-auth pytz
 
       - name: Run Backfill
         env:
           KEEP_MOBILE: ${{ secrets.KEEP_MOBILE }}
+          KEEP_PHONE: ${{ secrets.KEEP_PHONE }}
           KEEP_PASSWORD: ${{ secrets.KEEP_PASSWORD }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
         run: |
           python backfill_keep_history.py
