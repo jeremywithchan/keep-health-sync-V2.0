@@ -5,7 +5,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 def main():
-    sa_key = os.environ.get("GCP_SA_KEY") or os.environ.get("GOOGLE_CREDENTIALS")
+    sa_key = os.environ.get("GCP_SA_KEY") or os.environ.get("GOOGLE_CREDENTIALS") or os.environ.get("SERVICE_ACCOUNT_JSON")
     sheet_id = os.environ.get("GOOGLE_SHEET_ID") or os.environ.get("SPREADSHEET_ID")
     
     sa = json.loads(sa_key)
