@@ -1,4 +1,4 @@
-name: Keep Sync Workflow V2.0
+name: Daily Keep Sync V2.0
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  run-task:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -22,7 +22,7 @@ jobs:
           pip install --upgrade pip
           pip install requests gspread google-auth
 
-      - name: Run Script
+      - name: Run sync script
         env:
           KEEP_PHONE: ${{ secrets.KEEP_PHONE }}
           KEEP_MOBILE: ${{ secrets.KEEP_MOBILE }}
@@ -32,5 +32,4 @@ jobs:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: |
-          # 对应当前工作流需要执行的脚本名字（例如 sync_keep_data.py 或 backfill_keep_history.py）
           python sync_keep_data.py
