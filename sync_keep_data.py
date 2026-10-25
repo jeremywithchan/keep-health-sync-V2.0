@@ -9,59 +9,31 @@ from google.oauth2.service_account import Credentials
 def get_gspread_client():
     sa_key = os.environ.get("GCP_SA_KEY") or os.environ.get("GOOGLE_CREDENTIALS") or os.environ.get("SERVICE_ACCOUNT_JSON")
     if not sa_key:
-        raise RuntimeError("未找到 GCP_SA_KEY 或 GOOGLE_CREDENTIALS 密钥，请检查 GitHub Secrets！")
-    
-    if sa_key.strip().startswith("{"):
-        sa = json.loads(sa_key)
-    else:
-        for fn in ["credentials.json", "service_account.json", "gcp_key.json"]:
-            if os.path.exists(fn):
-                with open(fn, "r", encoding="utf-8") as f:
-                    sa = json.load(f)
-                break
-        else:
-            raise RuntimeError("无法解析 Google 服务账号密钥！")
-            
+        raise RuntimeError("未找到 GCP_SA_KEY 密钥，请检查 GitHub Secrets！")
+    sa = json.loads(sa_key)
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     return gspread.authorize(Credentials.from_service_account_info(sa, scopes=scopes))
 
 def open_health_sheet(gc):
     sheet_id = os.environ.get("SPREADSHEET_ID") or os.environ.get("GOOGLE_SHEET_ID")
-    if sheet_id and sheet_id.strip():
-        try:
-            return gc.open_by_key(sheet_id.strip())
-        except Exception:
-            pass
-    return gc.open("每周健康- 训练与运动数据")
+    return gc.open_by_key(sheet_id.strip())
 
 def fetch_keep_records():
     mobile = os.environ.get("KEEP_PHONE") or os.environ.get("KEEP_MOBILE") or "19933193369"
     password = os.environ.get("KEEP_PASSWORD") or "CHeng123"
-    headers = {
-        "Content-Type": "application/json",
-        "User-Agent": "Keep/7.0.0 (iPhone)"
-    }
+    headers = {"Content-Type": "application/json", "User-Agent": "Keep/7.0.0 (iPhone)"}
     for attempt in range(2):
         try:
-            lr = requests.post(
-                "https://api.gotokeep.com/v1.1/users/login",
-                json={"mobile": mobile, "password": password, "areaCode": "86"},
-                headers=headers,
-                timeout=20
-            )
+            lr = requests.post("https://api.gotokeep.com/v1.1/users/login", json={"mobile": mobile, "password": password, "areaCode": "86"}, headers=headers, timeout=20)
             ld = lr.json()
             if ld.get("ok"):
                 token = ld["data"].get("token") or ld["data"].get("accessToken")
-                r = requests.get(
-                    "https://api.gotokeep.com/pd/v3/stats/detail?dateUnit=all&type=all",
-                    headers={"Authorization": f"Bearer {token}", "User-Agent": headers["User-Agent"]},
-                    timeout=30
-                )
+                r = requests.get("https://api.gotokeep.com/pd/v3/stats/detail?dateUnit=all&type=all", headers={"Authorization": f"Bearer {token}", "User-Agent": headers["User-Agent"]}, timeout=30)
                 d = r.json()
                 if d.get("ok"):
                     return d.get("data", {}).get("records", [])
         except Exception as e:
-            print(f"⚠️ Keep 请求异常 (尝试 {attempt+1}/2): {e}")
+            print(f"⚠️ Keep 请求异常: {e}")
         if attempt == 0:
             time.sleep(5)
     return []
@@ -117,8 +89,7 @@ def main():
     new_rows = []
 
     for rc in records:
-        logs_raw = rc.get("logs", [])
-        for lg in logs_raw:
+        for lg in rc.get("logs", []):
             s = lg.get("stats") if isinstance(lg, dict) else lg
             if not isinstance(s, dict) or not s.get("doneDate"):
                 continue
