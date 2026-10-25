@@ -2,31 +2,28 @@ name: Daily Health Report V2.0
 
 on:
   schedule:
-    - cron: '0 21 * * *'
+    - cron: '0 21 * * *'  # 北京时间 05:00
   workflow_dispatch:
 
 jobs:
   report:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: Native Git Checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          pip install --upgrade pip
-          pip install requests gspread google-auth
+          git init
+          git remote add origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git
+          git fetch --depth 1 origin ${{ github.sha }}
+          git checkout FETCH_HEAD
 
-      - name: Generate daily report
+      - name: Install Dependencies & Generate Report
         env:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: |
-          python generate_daily_report.py
+          pip3 install --break-system-packages requests gspread google-auth
+          python3 generate_daily_report.py
