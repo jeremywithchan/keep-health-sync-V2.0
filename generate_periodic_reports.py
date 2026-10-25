@@ -1,4 +1,5 @@
-import os, json
+import os
+import json
 from datetime import datetime, timedelta, timezone
 import gspread
 from google.oauth2.service_account import Credentials
@@ -9,19 +10,28 @@ def get_gspread_client():
     return gspread.authorize(Credentials.from_service_account_info(sa, scopes=["https://www.googleapis.com/auth/spreadsheets"]))
 
 def calc_period_stats(rows, start_d, end_d):
-    run_km, run_cnt, str_cnt, dur_s, kcal, hr_s, hr_n, z2_c = 0.0, 0, 0, 0, 0, 0.0, 0, 0
+    run_km, run_cnt, str_cnt, dur_s, kcal = 0.0, 0, 0, 0, 0
+    hr_s, hr_n, z2_c = 0.0, 0, 0
     for r in rows:
-        if len(r) < 12: continue
+        if len(r) < 12:
+            continue
         d = r[0]
         if start_d <= d <= end_d:
-            tp, km, dur, cal = r[1], float(r[3] or 0), int(float(r[4] or 0)), int(float(r[5] or 0))
+            tp = r[1]
+            km = float(r[3] or 0)
+            dur = int(float(r[4] or 0))
+            cal = int(float(r[5] or 0))
             hr = float(r[6]) if r[6] and str(r[6]).strip() != "" else 0.0
-            dur_s += dur; kcal += cal
+            dur_s += dur
+            kcal += cal
             if tp == "running" and km > 0:
-                run_km += km; run_cnt += 1
+                run_km += km
+                run_cnt += 1
                 if hr > 0:
-                    hr_s += hr; hr_n += 1
-                    if 139 <= hr < 157: z2_c += 1
+                    hr_s += hr
+                    hr_n += 1
+                    if 139 <= hr < 157:
+                        z2_c += 1
             elif tp == "training":
                 str_cnt += 1
     return {
@@ -64,6 +74,7 @@ def main():
     ws_rep.clear()
     ws_rep.append_row(["报告生成时间", "报告类型", "本期时间范围", "对比基准说明", "跑量对比", "跑步次数对比", "力量训练对比", "运动时长对比", "卡路里消耗对比", "心率表现", "建议", "Markdown报告全文"])
     ws_rep.append_rows(out_rows, value_input_option="USER_ENTERED")
+    print("🎉 《周期健康报告》定期生成完毕！")
 
 if __name__ == "__main__":
     main()
