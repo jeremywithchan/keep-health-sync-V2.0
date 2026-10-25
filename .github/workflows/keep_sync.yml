@@ -2,7 +2,7 @@ name: Daily Keep Sync V2.0
 
 on:
   schedule:
-    - cron: '30 16 * * *'
+    - cron: '30 16 * * *'  # 北京时间 00:30
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
           git fetch --depth 1 origin ${{ github.sha }}
           git checkout FETCH_HEAD
 
-      - name: Install Dependencies & Run Script
+      - name: Install Dependencies & Run Sync
         env:
           KEEP_PHONE: ${{ secrets.KEEP_PHONE }}
           KEEP_MOBILE: ${{ secrets.KEEP_MOBILE }}
@@ -30,3 +30,4 @@ jobs:
         run: |
           pip3 install --break-system-packages requests gspread google-auth
           python3 sync_keep_data.py
+          python3 sync_diet_data.py
