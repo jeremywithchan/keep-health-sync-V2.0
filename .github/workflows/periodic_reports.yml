@@ -2,7 +2,7 @@ name: Periodic Health Report V2.0
 
 on:
   schedule:
-    - cron: '50 18 * * 0'  # 每周一北京时间 02:50
+    - cron: '50 18 * * 0'
   workflow_dispatch:
 
 jobs:
@@ -28,5 +28,6 @@ jobs:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
         run: |
           python generate_periodic_reports.py
